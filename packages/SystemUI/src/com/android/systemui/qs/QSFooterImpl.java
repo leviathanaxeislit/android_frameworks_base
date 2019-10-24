@@ -23,11 +23,17 @@ import static com.android.systemui.util.InjectionInflationController.VIEW_CONTEX
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.Configuration;
+import android.database.ContentObserver;
 import android.graphics.PorterDuff.Mode;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.RippleDrawable;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.UserHandle;
 import android.os.UserManager;
+import android.provider.Settings;
 import android.util.AttributeSet;
 import android.view.View;
 import android.view.View.OnClickListener;
@@ -44,6 +50,7 @@ import com.android.internal.logging.MetricsLogger;
 import com.android.internal.logging.nano.MetricsProto;
 import com.android.keyguard.KeyguardUpdateMonitor;
 import com.android.settingslib.Utils;
+import com.android.settingslib.development.DevelopmentSettingsEnabler;
 import com.android.settingslib.drawable.UserIconDrawable;
 import com.android.systemui.Dependency;
 import com.android.systemui.R;
@@ -79,7 +86,6 @@ public class QSFooterImpl extends FrameLayout implements QSFooter,
 
     private boolean mListening;
 
-    private QSCarrierGroup mCarrierGroup;
     protected MultiUserSwitch mMultiUserSwitch;
     private ImageView mMultiUserAvatar;
 
@@ -87,12 +93,22 @@ public class QSFooterImpl extends FrameLayout implements QSFooter,
     private float mExpansionAmount;
 
     protected View mEdit;
+    protected View mEditContainer;
     private TouchAnimator mSettingsCogAnimator;
 
     private View mActionsContainer;
     private View mDragHandle;
 
     private OnClickListener mExpandClickListener;
+
+    /*private final ContentObserver mDeveloperSettingsObserver = new ContentObserver(
+            new Handler(mContext.getMainLooper())) {
+        @Override
+        public void onChange(boolean selfChange, Uri uri) {
+            super.onChange(selfChange, uri);
+            setBuildText();
+        }
+    };*/
 
     @Inject
     public QSFooterImpl(@Named(VIEW_CONTEXT) Context context, AttributeSet attrs,
@@ -126,13 +142,12 @@ public class QSFooterImpl extends FrameLayout implements QSFooter,
         mSettingsContainer = findViewById(R.id.settings_button_container);
         mSettingsButton.setOnClickListener(this);
 
-        mCarrierGroup = findViewById(R.id.carrier_group);
-
         mMultiUserSwitch = findViewById(R.id.multi_user_switch);
         mMultiUserAvatar = mMultiUserSwitch.findViewById(R.id.multi_user_avatar);
 
         mDragHandle = findViewById(R.id.qs_drag_handle_view);
         mActionsContainer = findViewById(R.id.qs_footer_actions_container);
+        mEditContainer = findViewById(R.id.qs_footer_actions_edit_container);
 
         // RenderThread is doing more harm than good when touching the header (to expand quick
         // settings), so disable it for this view
@@ -144,6 +159,21 @@ public class QSFooterImpl extends FrameLayout implements QSFooter,
                 oldBottom) -> updateAnimator(right - left));
         setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_YES);
         updateEverything();
+        //setBuildText();
+    }
+
+    private void setBuildText() {
+        /*TextView v = findViewById(R.id.build);
+        if (v == null) return;
+        if (DevelopmentSettingsEnabler.isDevelopmentSettingsEnabled(mContext)) {
+            v.setText(mContext.getString(
+                    com.android.internal.R.string.bugreport_status,
+                    Build.VERSION.RELEASE,
+                    Build.ID));
+            v.setVisibility(View.VISIBLE);
+        } else {
+            v.setVisibility(View.GONE);
+        }*/
     }
 
     private void updateAnimator(int width) {
@@ -186,7 +216,7 @@ public class QSFooterImpl extends FrameLayout implements QSFooter,
     private TouchAnimator createFooterAnimator() {
         return new TouchAnimator.Builder()
                 .addFloat(mActionsContainer, "alpha", 0, 1)
-                .addFloat(mCarrierGroup, "alpha", 0, 1)
+                .addFloat(mEditContainer, "alpha", 0, 1)
                 .addFloat(mDragHandle, "alpha", 1, 0, 0)
                 .addFloat(mPageIndicator, "alpha", 0, 1)
                 .setStartDelay(0.15f)
@@ -223,12 +253,16 @@ public class QSFooterImpl extends FrameLayout implements QSFooter,
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
+        /*mContext.getContentResolver().registerContentObserver(
+                Settings.Global.getUriFor(Settings.Global.DEVELOPMENT_SETTINGS_ENABLED), false,
+                mDeveloperSettingsObserver, UserHandle.USER_ALL);*/
     }
 
     @Override
     @VisibleForTesting
     public void onDetachedFromWindow() {
         setListening(false);
+        //mContext.getContentResolver().unregisterContentObserver(mDeveloperSettingsObserver);
         super.onDetachedFromWindow();
     }
 
@@ -285,7 +319,7 @@ public class QSFooterImpl extends FrameLayout implements QSFooter,
         mSettingsContainer.findViewById(R.id.tuner_icon).setVisibility(View.INVISIBLE);
         final boolean isDemo = UserManager.isDeviceInDemoMode(mContext);
         mMultiUserSwitch.setVisibility(showUserSwitcher() ? View.VISIBLE : View.INVISIBLE);
-        mEdit.setVisibility(isDemo || !mExpanded ? View.INVISIBLE : View.VISIBLE);
+        mEditContainer.setVisibility(isDemo || !mExpanded ? View.INVISIBLE : View.VISIBLE);
         mSettingsButton.setVisibility(isDemo || !mExpanded ? View.INVISIBLE : View.VISIBLE);
     }
 
@@ -299,7 +333,6 @@ public class QSFooterImpl extends FrameLayout implements QSFooter,
         } else {
             mUserInfoController.removeCallback(this);
         }
-        mCarrierGroup.setListening(mListening);
     }
 
     @Override
